@@ -1,0 +1,55 @@
+# This is a sample workflow, feel free to replace it with your source code
+#
+# This workflow does the following:
+# - reads current time and date information from an external API and stores
+#   the response in CurrentDateTime variable
+# - retrieves a list of Wikipedia articles related to the day of the week
+#   from CurrentDateTime
+# - returns the list of articles as an output of the workflow
+# FYI, In terraform you need to escape the $$ or it will cause errors.
+main:
+  params: [args]
+  steps:
+  - getOpenGeocodeing:
+      call: http.get
+      args:
+        url: https://api.openweathermap.org/geo/1.0/direct
+        query:
+          q: $${args.cityName}
+          appid: $${args.openWeatherApiKey}
+      result: GeoResult
+
+  - assignWeatherResult:
+      assign:
+        - geoResult: $${GeoResult.body[0]}
+
+  - getCurrentWeather:
+      call: http.get
+      args:
+        url: https://api.openweathermap.org/data/2.5/weather
+        query:
+          lat: $${geoResult.lat}
+          lon: $${geoResult.lon}
+          appid: $${args.openWeatherApiKey}
+      result: WeatherResult
+
+  - getArea:
+      call: http.get
+      args:
+        url: ${cloud_run_url}
+        query:
+          city: $${geoResult.name}
+          timezone: $${WeatherResult.body.timezone}
+        auth:
+          type: OIDC
+
+      result: CurrentDateTime
+
+  - log_result:
+      call: sys.log
+      args:
+        data: $${WeatherResult}
+        severity: INFO
+
+  - returnOutput:
+      return: $${CurrentDateTime.body.city + " is " + WeatherResult.body.weather[0].description + " at " + CurrentDateTime.body.time + " " + CurrentDateTime.body.date}
